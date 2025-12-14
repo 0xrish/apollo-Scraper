@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 import time
 import json
 import os
+import pandas as pd
 
 
 def load_config(config_path='config.json'):
@@ -43,6 +44,39 @@ def save_data_to_file(data, output_file="apollo_data.json"):
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(all_data, f, ensure_ascii=False, indent=4)
     print(f"Data saved: {len(data)} new contacts added. Total contacts in {output_file}: {len(all_data)}")
+
+def convert_json_to_csv(json_file="apollo_data.json", csv_file="apollo_data.csv"):
+    """Convert JSON file to CSV format."""
+    try:
+        # Read JSON file
+        if not os.path.exists(json_file):
+            print(f"JSON file {json_file} not found. Skipping CSV conversion.")
+            return
+        
+        with open(json_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        if not data:
+            print("No data found in JSON file. Skipping CSV conversion.")
+            return
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(data)
+        
+        # Handle nested fields (like social_media which might be a list)
+        # Flatten social_media list to comma-separated string
+        if 'social_media' in df.columns:
+            df['social_media'] = df['social_media'].apply(
+                lambda x: ', '.join(x) if isinstance(x, list) else str(x)
+            )
+        
+        # Save to CSV
+        df.to_csv(csv_file, index=False, encoding='utf-8')
+        print(f"\nCSV file created: {csv_file}")
+        print(f"Total records in CSV: {len(df)}")
+        
+    except Exception as e:
+        print(f"Error converting JSON to CSV: {e}")
 
 def capture_api_response(sb, api_url, timeout=30):
     """Capture API response from network logs."""
@@ -330,6 +364,11 @@ def scrape_apollo(email, password, login_url, list_url, output_file="apollo_data
                 break
 
     print(f"\nScraping finished. Total pages scraped: {current_page-1}. Total contacts saved to {output_file}: {total_contacts_scraped}")
+    
+    # Convert JSON to CSV after scraping is complete
+    csv_file = output_file.replace('.json', '.csv')
+    print(f"\nConverting JSON to CSV...")
+    convert_json_to_csv(output_file, csv_file)
 
 # Run scraper
 scrape_apollo(EMAIL, PASSWORD, LOGIN_URL, TARGET_URL)
