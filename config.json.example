@@ -1,0 +1,78 @@
+{
+  "credentials": {
+    "email": "your-email@example.com",
+    "password": "your-password",
+    "two_captcha_api_key": "your-2captcha-api-key" // optional
+  },
+  "urls": {
+    "login_url": "https://app.apollo.io/#/login?locale=en",
+    "saved_link_list": "https://app.apollo.io/#/people?personLocations[]=San%20Francisco%2C%20California%2C%20United%20States&organizationIndustryTagIds[]=5567cd4e7369643b70010000&page=1&recommendationConfigId=score"
+  },
+  "browser": {
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+    "user_agents": [
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0; IN) Gecko/20100101 Firefox/117.0",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 IN",
+      "Mozilla/5.0 (Linux; Android 11; RMX2185) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+      "Mozilla/5.0 (Linux; Android 10; SM-M315F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+      "Mozilla/5.0 (Linux; Android 12; M2101K7AI) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/124.0.0.0 IN",
+      "Mozilla/5.0 (Linux; Android 13; CPH2381) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+      "Mozilla/5.0 (Linux; Android 13; SM-A536E) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+      "Mozilla/5.0 (Linux; Android 12; 2201116TI) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+    ],
+    "chrome_driver_arguments": [
+      "--disable-blink-features=AutomationControlled",
+      "--disable-infobars",
+      "--start-maximized",
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-gpu",
+      "--disable-extensions",
+      "--disable-application-cache",
+      "--disable-dev-shm-usage",
+      "--disable-popup-blocking",
+      "--check-for-update-interval=31536000",
+      "--disable-component-update",
+      "--no-default-browser-check",
+      "--simulate-outdated-no-au='Tue, 31 Dec 2099 23:59:59 GMT'"
+    ]
+  },
+  "captcha": {
+    "sitekey": "0x4AAAAAAA2OUu4yFDL9LSeZ"
+  },
+  "selectors": {
+    "email_field": {
+      "by": "name",
+      "value": "email"
+    },
+    "password_field": {
+      "by": "css_selector",
+      "value": "input[name='password']"
+    },
+    "password_wrapper_xpath": "//*[@id=\"provider-mounter\"]/div/div[2]/div[2]/div[1]/div/div/div/div[2]/div[3]/form/div/div[2]/div[2]/div[1]",
+    "login_button": {
+      "by": "xpath",
+      "value": "//*[@id=\"provider-mounter\"]/div/div[2]/div[2]/div[1]/div/div/div/div[2]/div[3]/form/div/button"
+    },
+    "homepage_class": "zp_gCXMt",
+    "contact_name_cell": {
+      "by": "css_selector",
+      "value": "div[data-testid='contact-name-cell']"
+    },
+    "table_xpath": "#main-container-column-2 > div.zp_QhGKA.zp_VEQg2.zp_KMo2v > div > div > div.zp_p234g.people-finder-shell-container > div.zp_pxYrj > div.zp_lYmVV > div.zp_DhjQ0.zp_a7xaB > div > div.zp_d95ww > div",
+    "next_page_button": {
+      "by": "xpath",
+      "value": "//*[@id=\"main-container-column-2\"]/div[2]/div[2]/div[2]/div/div[2]/div/div[2]/button[2]"
+    }
+  },
+  "timeouts": {
+    "default": 10,
+    "page_load": 20
+  },
+  "scraping": {
+    "max_pages": 10
+  },
+  "stealth_js": "(() => {\n    delete Object.getPrototypeOf(navigator).webdriver;\n    Object.defineProperty(navigator, 'plugins', {\n        get: () => [\n            {0: {type: 'application/x-google-chrome-pdf', description: 'Portable Document Format'}},\n            {0: {type: 'application/pdf', description: 'Portable Document Format'}}\n        ]\n    });\n    Object.defineProperty(navigator, 'platform', {\n        get: () => (/(Android|Linux)/.test(navigator.userAgent) ? 'Linux armv8l' : 'Win32')\n    });\n    Object.defineProperty(navigator, 'languages', {\n        get: () => ['en-IN','en','hi-IN']\n    });\n    Object.defineProperty(navigator, 'connection', {\n        get: () => ({\n            downlink: 10,\n            effectiveType: '4g',\n            rtt: 100,\n            saveData: false,\n            type: 'wifi'\n        })\n    });\n    Object.defineProperty(navigator, 'hardwareConcurrency', {\n        get: () => 8\n    });\n    Object.defineProperty(navigator, 'deviceMemory', {\n        get: () => 8\n    });\n    window.chrome = {\n        app: { isInstalled: false },\n        webstore: { onInstallStageChanged: {}, onDownloadProgress: {} },\n        runtime: { }\n    };\n    Object.defineProperty(navigator, 'permissions', {\n        get: () => ({\n            query: (parameters) => (\n                parameters.name === 'notifications'\n                ? Promise.resolve({ state: Notification.permission })\n                : Promise.resolve({ state: 'granted' })\n            )\n        })\n    });\n})();"
+}
+
