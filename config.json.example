@@ -71,7 +71,8 @@
     "page_load": 20
   },
   "scraping": {
-    "max_pages": 2
+    "max_pages": 2,
+    "output_format": "json"
   },
   "stealth_js": "(() => {\n    delete Object.getPrototypeOf(navigator).webdriver;\n    Object.defineProperty(navigator, 'plugins', {\n        get: () => [\n            {0: {type: 'application/x-google-chrome-pdf', description: 'Portable Document Format'}},\n            {0: {type: 'application/pdf', description: 'Portable Document Format'}}\n        ]\n    });\n    Object.defineProperty(navigator, 'platform', {\n        get: () => (/(Android|Linux)/.test(navigator.userAgent) ? 'Linux armv8l' : 'Win32')\n    });\n    Object.defineProperty(navigator, 'languages', {\n        get: () => ['en-IN','en','hi-IN']\n    });\n    Object.defineProperty(navigator, 'connection', {\n        get: () => ({\n            downlink: 10,\n            effectiveType: '4g',\n            rtt: 100,\n            saveData: false,\n            type: 'wifi'\n        })\n    });\n    Object.defineProperty(navigator, 'hardwareConcurrency', {\n        get: () => 8\n    });\n    Object.defineProperty(navigator, 'deviceMemory', {\n        get: () => 8\n    });\n    window.chrome = {\n        app: { isInstalled: false },\n        webstore: { onInstallStageChanged: {}, onDownloadProgress: {} },\n        runtime: { }\n    };\n    Object.defineProperty(navigator, 'permissions', {\n        get: () => ({\n            query: (parameters) => (\n                parameters.name === 'notifications'\n                ? Promise.resolve({ state: Notification.permission })\n                : Promise.resolve({ state: 'granted' })\n            )\n        })\n    });\n})();"
 }

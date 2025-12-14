@@ -1,9 +1,11 @@
+
+
 from seleniumbase import SB
 from bs4 import BeautifulSoup
 import time
 import json
 import os
-import pandas as pd
+import csv
 
 
 def load_config(config_path='config.json'):
@@ -24,9 +26,17 @@ CONTACT_NAME_CELL = config['selectors']['contact_name_cell']['value']
 TABLE_XPATH = config['selectors']['table_xpath']
 TIMEOUT = config['timeouts']['page_load']
 MAX_PAGES = config.get('scraping', {}).get('max_pages', 10)  # Default to 10 if not specified
+OUTPUT_FORMAT = config.get('scraping', {}).get('output_format', 'both').lower()  # Default to 'both' if not specified
+# Validate output_format
+if OUTPUT_FORMAT not in ['json', 'csv', 'both']:
+    print(f"Warning: Invalid output_format '{OUTPUT_FORMAT}'. Using 'both' instead.")
+    OUTPUT_FORMAT = 'both'
 
-def save_data_to_file(data, output_file="apollo_data.json"):
-    """Appends scraped data to a JSON file incrementally."""
+def save_data_to_file(data, output_file="apollo_data.json", output_format="both"):
+    """Appends scraped data to a JSON file incrementally (if JSON or both format is selected)."""
+    if output_format not in ['json', 'both']:
+        return  # Skip JSON saving if only CSV is requested
+    
     # Read existing data if file exists
     existing_data = []
     if os.path.exists(output_file):
@@ -60,23 +70,102 @@ def convert_json_to_csv(json_file="apollo_data.json", csv_file="apollo_data.csv"
             print("No data found in JSON file. Skipping CSV conversion.")
             return
         
-        # Convert to DataFrame
-        df = pd.DataFrame(data)
+        # Get all unique keys from all records to create CSV headers
+        all_keys = set()
+        for record in data:
+            all_keys.update(record.keys())
         
-        # Handle nested fields (like social_media which might be a list)
-        # Flatten social_media list to comma-separated string
-        if 'social_media' in df.columns:
-            df['social_media'] = df['social_media'].apply(
-                lambda x: ', '.join(x) if isinstance(x, list) else str(x)
-            )
+        # Sort keys for consistent column order
+        fieldnames = sorted(all_keys)
         
-        # Save to CSV
-        df.to_csv(csv_file, index=False, encoding='utf-8')
+        # Write to CSV
+        with open(csv_file, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            
+            for record in data:
+                # Flatten nested structures
+                row = {}
+                for key in fieldnames:
+                    value = record.get(key, '')
+                    # Handle lists (like social_media)
+                    if isinstance(value, list):
+                        value = ', '.join(str(item) for item in value) if value else 'NA'
+                    # Handle dictionaries (like organization)
+                    elif isinstance(value, dict):
+                        value = ', '.join(f"{k}: {v}" for k, v in value.items()) if value else 'NA'
+                    # Handle None values
+                    elif value is None:
+                        value = 'NA'
+                    else:
+                        value = str(value)
+                    row[key] = value
+                
+                writer.writerow(row)
+        
         print(f"\nCSV file created: {csv_file}")
-        print(f"Total records in CSV: {len(df)}")
+        print(f"Total records in CSV: {len(data)}")
         
     except Exception as e:
         print(f"Error converting JSON to CSV: {e}")
+
+def save_data_to_csv(data, csv_file="apollo_data.csv"):
+    """Appends scraped data to a CSV file incrementally."""
+    try:
+        # Read existing data if file exists
+        existing_data = []
+        if os.path.exists(csv_file):
+            try:
+                with open(csv_file, 'r', encoding='utf-8', newline='') as f:
+                    reader = csv.DictReader(f)
+                    existing_data = list(reader)
+            except Exception as e:
+                print(f"Warning: Could not read existing CSV file: {e}")
+                existing_data = []
+        
+        # Merge existing data with new data
+        all_data = existing_data + data
+        
+        if not all_data:
+            return
+        
+        # Get all unique keys from all records to create CSV headers
+        all_keys = set()
+        for record in all_data:
+            all_keys.update(record.keys())
+        
+        # Sort keys for consistent column order
+        fieldnames = sorted(all_keys)
+        
+        # Write to CSV
+        with open(csv_file, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            
+            for record in all_data:
+                # Flatten nested structures
+                row = {}
+                for key in fieldnames:
+                    value = record.get(key, '')
+                    # Handle lists (like social_media)
+                    if isinstance(value, list):
+                        value = ', '.join(str(item) for item in value) if value else 'NA'
+                    # Handle dictionaries (like organization)
+                    elif isinstance(value, dict):
+                        value = ', '.join(f"{k}: {v}" for k, v in value.items()) if value else 'NA'
+                    # Handle None values
+                    elif value is None:
+                        value = 'NA'
+                    else:
+                        value = str(value)
+                    row[key] = value
+                
+                writer.writerow(row)
+        
+        print(f"Data saved to CSV: {len(data)} new contacts added. Total contacts in {csv_file}: {len(all_data)}")
+        
+    except Exception as e:
+        print(f"Error saving data to CSV: {e}")
 
 def capture_api_response(sb, api_url, timeout=30):
     """Capture API response from network logs."""
@@ -120,15 +209,138 @@ def capture_api_response(sb, api_url, timeout=30):
     print(f"Timeout: API response not captured after {timeout} seconds")
     return None
 
-def scrape_apollo(email, password, login_url, list_url, output_file="apollo_data.json"):
+def unlock_contact_details(sb, person_id):
+    """Unlock email and phone number for a contact by calling Apollo APIs."""
+    try:
+        # Generate cache key (timestamp)
+        cache_key = int(time.time() * 1000)
+        
+        # Payload for both APIs
+        payload = {
+            "entity_ids": [person_id],
+            "analytics_context": "Searcher: Individual Add Button",
+            "skip_fetching_people": True,
+            "cta_name": "Access email",
+            "cacheKey": cache_key
+        }
+        
+        # Clear previous unlock responses
+        sb.execute_script("window.__apollo_unlock_responses = [];")
+        
+        # Step 1: Call safety_check API
+        safety_check_url = "https://app.apollo.io/api/v1/mixed_people/safety_check"
+        print(f"  Calling safety_check for person {person_id}...")
+        
+        # Make the API call via JavaScript
+        sb.execute_script(f"""
+            fetch('{safety_check_url}', {{
+                method: 'POST',
+                headers: {{
+                    'Content-Type': 'application/json',
+                }},
+                body: JSON.stringify({json.dumps(payload)})
+            }}).catch(err => console.error('Safety check error:', err));
+        """)
+        
+        time.sleep(1)  # Small delay between API calls
+        
+        # Step 2: Call add_to_my_prospects API and wait for response
+        add_prospects_url = "https://app.apollo.io/api/v1/mixed_people/add_to_my_prospects"
+        print(f"  Calling add_to_my_prospects for person {person_id}...")
+        
+        # Update cache key for second call
+        payload['cacheKey'] = int(time.time() * 1000)
+        
+        # Make the API call
+        sb.execute_script(f"""
+            fetch('{add_prospects_url}', {{
+                method: 'POST',
+                headers: {{
+                    'Content-Type': 'application/json',
+                }},
+                body: JSON.stringify({json.dumps(payload)})
+            }}).catch(err => console.error('Add prospects error:', err));
+        """)
+        
+        # Wait for the response to appear in intercepted responses
+        prospects_response = None
+        start_time = time.time()
+        timeout = 10  # 10 seconds timeout
+        initial_response_count = 0
+        
+        # Get initial count of responses
+        try:
+            initial_responses = sb.execute_script("return window.__apollo_unlock_responses || [];")
+            initial_response_count = len(initial_responses) if initial_responses else 0
+        except:
+            pass
+        
+        while time.time() - start_time < timeout:
+            try:
+                responses = sb.execute_script("return window.__apollo_unlock_responses || [];")
+                if responses and len(responses) > initial_response_count:
+                    # Get the most recent response (the one we just got)
+                    prospects_response = responses[-1]
+                    # Verify it has contacts
+                    if 'contacts' in prospects_response and len(prospects_response['contacts']) > 0:
+                        print(f"  Response received for person {person_id}")
+                        break
+            except Exception as e:
+                pass
+            time.sleep(0.5)
+        
+        # Fallback: Try to capture from network logs if JS interception didn't work
+        if not prospects_response:
+            print(f"  Trying network logs method for unlock response...")
+            prospects_response = capture_api_response(sb, add_prospects_url, timeout=5)
+        
+        if not prospects_response:
+            print(f"  Timeout waiting for unlock response for person {person_id}")
+            return None, None
+        
+        # Extract email and phone from response
+        email = None
+        phone = None
+        
+        if 'contacts' in prospects_response and len(prospects_response['contacts']) > 0:
+            contact = prospects_response['contacts'][0]
+            
+            # Get email
+            email = contact.get('email', None)
+            if not email and 'contact_emails' in contact and len(contact['contact_emails']) > 0:
+                email = contact['contact_emails'][0].get('email', None)
+            
+            # Get phone number
+            if 'phone_numbers' in contact and len(contact['phone_numbers']) > 0:
+                phone = contact['phone_numbers'][0].get('raw_number', None)
+                if not phone:
+                    phone = contact['phone_numbers'][0].get('sanitized_number', None)
+        
+        return email, phone
+        
+    except Exception as e:
+        print(f"  Error unlocking contact details for {person_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        return None, None
+
+def scrape_apollo(email, password, login_url, list_url, output_file="apollo_data.json", output_format="both"):
     all_data = []
     total_contacts_scraped = 0
     current_page = 1
     API_URL = "https://app.apollo.io/api/v1/mixed_people/search"
+    
+    # Determine file names based on output format
+    json_file = output_file if output_file.endswith('.json') else "apollo_data.json"
+    csv_file = json_file.replace('.json', '.csv')
 
-    # Clear the output file at the start of a new scrape
-    if os.path.exists(output_file):
-        os.remove(output_file)
+    # Clear the output files at the start of a new scrape
+    if output_format in ['json', 'both']:
+        if os.path.exists(json_file):
+            os.remove(json_file)
+    if output_format in ['csv', 'both']:
+        if os.path.exists(csv_file):
+            os.remove(csv_file)
 
     with SB(uc=True, headless=False) as sb:
         sb.open(login_url)
@@ -198,6 +410,7 @@ def scrape_apollo(email, password, login_url, list_url, output_file="apollo_data
         # Set up JavaScript interception for API calls
         sb.execute_script("""
             window.__apollo_api_responses = [];
+            window.__apollo_unlock_responses = [];
             
             // Intercept fetch
             const originalFetch = window.fetch;
@@ -210,6 +423,16 @@ def scrape_apollo(email, password, login_url, list_url, output_file="apollo_data
                             window.__apollo_api_responses.push(data);
                             console.log('API response intercepted:', data);
                         }).catch(err => console.error('Error parsing API response:', err));
+                        return response;
+                    });
+                }
+                if (typeof url === 'string' && url.includes('mixed_people/add_to_my_prospects')) {
+                    return originalFetch.apply(this, args).then(response => {
+                        const clonedResponse = response.clone();
+                        clonedResponse.json().then(data => {
+                            window.__apollo_unlock_responses.push(data);
+                            console.log('Unlock API response intercepted:', data);
+                        }).catch(err => console.error('Error parsing unlock API response:', err));
                         return response;
                     });
                 }
@@ -234,6 +457,17 @@ def scrape_apollo(email, password, login_url, list_url, output_file="apollo_data
                             console.log('API response intercepted via XHR:', data);
                         } catch(e) {
                             console.error('Error parsing XHR response:', e);
+                        }
+                    });
+                }
+                if (this._url && this._url.includes('mixed_people/add_to_my_prospects')) {
+                    this.addEventListener('load', function() {
+                        try {
+                            const data = JSON.parse(this.responseText);
+                            window.__apollo_unlock_responses.push(data);
+                            console.log('Unlock API response intercepted via XHR:', data);
+                        } catch(e) {
+                            console.error('Error parsing unlock XHR response:', e);
                         }
                     });
                 }
@@ -288,7 +522,13 @@ def scrape_apollo(email, password, login_url, list_url, output_file="apollo_data
                 people = api_response.get('people', [])
                 print(f"Found {len(people)} people in API response")
                 
-                for person in people:
+                for idx, person in enumerate(people, 1):
+                    person_id = person.get('id')
+                    person_name = person.get('name', 'Unknown')
+                    
+                    print(f"\n  Processing person {idx}/{len(people)}: {person_name} (ID: {person_id})")
+                    
+                    # Initialize person data with basic info
                     person_data = {
                         "name": person.get('name', 'NA'),
                         "first_name": person.get('first_name', 'NA'),
@@ -303,6 +543,41 @@ def scrape_apollo(email, password, login_url, list_url, output_file="apollo_data
                         "phone_number": person.get('phone_numbers', [{}])[0].get('raw_number', 'NA') if person.get('phone_numbers') else 'NA',
                         "page": current_page
                     }
+                    
+                    # Unlock email and phone if person_id is available and email/phone are locked
+                    if person_id:
+                        # Check if email/phone need unlocking
+                        current_email = person.get('email', '')
+                        current_phone = person.get('phone_numbers', [{}])[0].get('raw_number', '') if person.get('phone_numbers') else ''
+                        
+                        needs_unlock = (
+                            not current_email or 
+                            current_email == 'email_not_unlocked@domain.com' or
+                            not current_phone or
+                            len(person.get('phone_numbers', [])) == 0
+                        )
+                        
+                        if needs_unlock:
+                            print(f"  Unlocking contact details for {person_name}...")
+                            unlocked_email, unlocked_phone = unlock_contact_details(sb, person_id)
+                            
+                            if unlocked_email and unlocked_email != 'email_not_unlocked@domain.com':
+                                person_data['email'] = unlocked_email
+                                print(f"  ✓ Email unlocked: {unlocked_email}")
+                            else:
+                                print(f"  ✗ Email not available or still locked")
+                            
+                            if unlocked_phone:
+                                person_data['phone_number'] = unlocked_phone
+                                print(f"  ✓ Phone unlocked: {unlocked_phone}")
+                            else:
+                                print(f"  ✗ Phone not available")
+                            
+                            # Small delay between unlocking contacts to avoid rate limiting
+                            time.sleep(1)
+                        else:
+                            print(f"  Email and phone already available")
+                    
                     page_data.append(person_data)
             elif api_response:
                 # If response structure is different, save raw data
@@ -331,11 +606,13 @@ def scrape_apollo(email, password, login_url, list_url, output_file="apollo_data
             
             # Save data incrementally after each page
             if page_data:
-                save_data_to_file(page_data, output_file)
+                # Always save to JSON (needed for JSON mode, both mode, and as temp storage for CSV mode)
+                if output_format in ['json', 'both', 'csv']:
+                    save_data_to_file(page_data, json_file, 'json')  # Always save as JSON for now
             
             # Clear intercepted responses for next page
             try:
-                sb.execute_script("window.__apollo_api_responses = [];")
+                sb.execute_script("window.__apollo_api_responses = []; window.__apollo_unlock_responses = [];")
             except:
                 pass
 
@@ -363,12 +640,23 @@ def scrape_apollo(email, password, login_url, list_url, output_file="apollo_data
                 print("No more pages or button not available. Ending scraping.")
                 break
 
-    print(f"\nScraping finished. Total pages scraped: {current_page-1}. Total contacts saved to {output_file}: {total_contacts_scraped}")
-    
-    # Convert JSON to CSV after scraping is complete
-    csv_file = output_file.replace('.json', '.csv')
-    print(f"\nConverting JSON to CSV...")
-    convert_json_to_csv(output_file, csv_file)
+    # Final processing based on output format
+    if output_format == 'json':
+        print(f"\nScraping finished. Total pages scraped: {current_page-1}. Total contacts saved to {json_file}: {total_contacts_scraped}")
+    elif output_format == 'csv':
+        print(f"\nScraping finished. Total pages scraped: {current_page-1}. Converting to CSV...")
+        # Convert JSON to CSV (JSON was used as temporary storage)
+        convert_json_to_csv(json_file, csv_file)
+        # Delete temporary JSON file if CSV-only mode
+        if os.path.exists(json_file):
+            os.remove(json_file)
+            print(f"Temporary JSON file removed. CSV file saved: {csv_file}")
+        print(f"Total contacts saved to {csv_file}: {total_contacts_scraped}")
+    else:  # both
+        print(f"\nScraping finished. Total pages scraped: {current_page-1}. Total contacts saved to {json_file}: {total_contacts_scraped}")
+        # Convert JSON to CSV after scraping is complete
+        print(f"\nConverting JSON to CSV...")
+        convert_json_to_csv(json_file, csv_file)
 
 # Run scraper
-scrape_apollo(EMAIL, PASSWORD, LOGIN_URL, TARGET_URL)
+scrape_apollo(EMAIL, PASSWORD, LOGIN_URL, TARGET_URL, output_format=OUTPUT_FORMAT)
