@@ -46,7 +46,10 @@ This repository contains a Python-based web scraper designed to automate the ext
    ```
 
 4. Configure the scraper:
-   - Copy `config.json.example` to `config.json` (if available) or create `config.json`
+   - Copy `config.json.example` to `config.json`:
+     ```bash
+     cp config.json.example config.json
+     ```
    - Update `config.json` with your credentials:
      ```json
      {
@@ -64,6 +67,8 @@ This repository contains a Python-based web scraper designed to automate the ext
        }
      }
      ```
+   
+   **Note:** The `two_captcha_api_key` is optional. If not provided, the scraper will prompt for manual captcha solving when needed.
 
 ## How to Use
 

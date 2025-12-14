@@ -2,7 +2,7 @@
   "credentials": {
     "email": "your-email@example.com",
     "password": "your-password",
-    "two_captcha_api_key": "your-2captcha-api-key" // optional
+    "two_captcha_api_key": "your-2captcha-api-key"
   },
   "urls": {
     "login_url": "https://app.apollo.io/#/login?locale=en",
